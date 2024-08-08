@@ -19,6 +19,11 @@ public class FirstPersonControls : MonoBehaviour
     private Vector3 velocity; // Velocity of the player
 
     private CharacterController characterController; // Reference to the CharacterController component
+    
+    public Transform holdPosition; // Position where the picked-up object will be held
+
+    private GameObject heldObject; // Reference to the currently held object
+    public float pickUpRange = 3f;
 
 
     private void Awake()
@@ -36,15 +41,22 @@ public class FirstPersonControls : MonoBehaviour
         playerInput.Player.Enable();
 
         // Subscribe to the movement input events
-        playerInput.Player.Movement.performed += ctx => moveInput = ctx.ReadValue<Vector2>(); // Update moveInput when movement input is performed
-        playerInput.Player.Movement.canceled += ctx => moveInput = Vector2.zero; // Reset moveInput when movement input is canceled
+        playerInput.Player.Movement.performed +=
+            ctx => moveInput = ctx.ReadValue<Vector2>(); // Update moveInput when movement input is performed
+        playerInput.Player.Movement.canceled +=
+            ctx => moveInput = Vector2.zero; // Reset moveInput when movement input is canceled
 
         // Subscribe to the look input events
-        playerInput.Player.Look.performed += ctx => lookInput = ctx.ReadValue<Vector2>(); // Update lookInput when look input is performed
-        playerInput.Player.Look.canceled += ctx => lookInput = Vector2.zero; // Reset lookInput when look input is canceled
+        playerInput.Player.Look.performed +=
+            ctx => lookInput = ctx.ReadValue<Vector2>(); // Update lookInput when look input is performed
+        playerInput.Player.Look.canceled +=
+            ctx => lookInput = Vector2.zero; // Reset lookInput when look input is canceled
 
         // Subscribe to the jump input event
         playerInput.Player.Jump.performed += ctx => Jump(); // Call the Jump method when jump input is performed
+        
+        // Subscribe to the pick-up input event
+        playerInput.Player.PickUp.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
     }
 
     private void Update()
@@ -52,7 +64,7 @@ public class FirstPersonControls : MonoBehaviour
         // Call Move and LookAround methods every frame to handle player movement and camera rotation
         Move();
         LookAround();
-        ApplyGravity(); 
+        ApplyGravity();
     }
 
     public void Move()
@@ -94,6 +106,7 @@ public class FirstPersonControls : MonoBehaviour
         velocity.y += gravity * Time.deltaTime; // Apply gravity to the velocity
         characterController.Move(velocity * Time.deltaTime); // Apply the velocity to the character
     }
+
     public void Jump()
     {
         if (characterController.isGrounded)
@@ -103,4 +116,33 @@ public class FirstPersonControls : MonoBehaviour
         }
     }
 
+    public void PickUpObject()
+    {
+        // Check if we are already holding an object
+        if (heldObject != null)
+        {
+            heldObject.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
+            heldObject.transform.parent = null;
+        }
+
+        // Perform a raycast from the camera's position forward
+        Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+        RaycastHit hit;
+
+        // Debugging: Draw the ray in the Scene view
+        Debug.DrawRay(playerCamera.position, playerCamera.forward * pickUpRange, Color.red, 2f);
+
+
+        if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.gameObject.CompareTag("Interactable"))
+        {
+            // Pick up the object
+            heldObject = hit.collider.gameObject;
+            heldObject.GetComponent<Rigidbody>().isKinematic = true; // Disable physics
+
+            // Attach the object to the hold position
+            heldObject.transform.position = holdPosition.position;
+            heldObject.transform.rotation = holdPosition.rotation;
+            heldObject.transform.parent = holdPosition;
+        }
+    }
 }
