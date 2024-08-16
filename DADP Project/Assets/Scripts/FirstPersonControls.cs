@@ -8,6 +8,8 @@ public class FirstPersonControls : MonoBehaviour
     // Public variables to set movement and look speed, and the player camera
     public float moveSpeed; // Speed at which the player moves
     public float lookSpeed; // Sensitivity of the camera movement
+    public float crouchSpeed;
+    public float crouchHeight;
     public float gravity = -9.81f; // Gravity value
     public float jumpHeight = 1.0f; // Height of the jump
     public Transform playerCamera; // Reference to the player's camera
@@ -21,11 +23,17 @@ public class FirstPersonControls : MonoBehaviour
     private CharacterController characterController; // Reference to the CharacterController component
     
     public Transform holdPosition; // Position where the picked-up object will be held
+    public Transform orbPosition;
 
-    private GameObject heldObject; // Reference to the currently held object
+    private GameObject heldObject;
+    private GameObject orbGameObject;// Reference to the currently held object
     public float pickUpRange = 3f;
 
+    private Vector3 orbScale;
+    private Vector3 heldObjectScale;
 
+    private bool crouched;
+    
     private void Awake()
     {
         // Get and store the CharacterController component attached to this GameObject
@@ -45,6 +53,8 @@ public class FirstPersonControls : MonoBehaviour
             ctx => moveInput = ctx.ReadValue<Vector2>(); // Update moveInput when movement input is performed
         playerInput.Player.Movement.canceled +=
             ctx => moveInput = Vector2.zero; // Reset moveInput when movement input is canceled
+        playerInput.Player.Crouch.performed += ctx => Crouch();
+        playerInput.Player.Crouch.canceled += ctx => unCrouch();
 
         // Subscribe to the look input events
         playerInput.Player.Look.performed +=
@@ -56,7 +66,7 @@ public class FirstPersonControls : MonoBehaviour
         playerInput.Player.Jump.performed += ctx => Jump(); // Call the Jump method when jump input is performed
         
         // Subscribe to the pick-up input event
-        playerInput.Player.PickUp.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
+        playerInput.Player.Interaction.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
     }
 
     private void Update()
@@ -76,7 +86,15 @@ public class FirstPersonControls : MonoBehaviour
         move = transform.TransformDirection(move);
 
         // Move the character controller based on the movement vector and speed
-        characterController.Move(move * (moveSpeed * Time.deltaTime));
+        if (!crouched)
+        {
+            characterController.Move(move * (moveSpeed * Time.deltaTime));
+        }
+        else
+        {
+            characterController.Move(move * (crouchSpeed * Time.deltaTime));
+        }
+        
     }
 
     public void LookAround()
@@ -118,32 +136,77 @@ public class FirstPersonControls : MonoBehaviour
 
     public void PickUpObject()
     {
-        // Check if we are already holding an object
+        if (!crouched)
+        {
+            
+            Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+            RaycastHit hit;
+
+            if (heldObject != null)
+            {
+                heldObject.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
+                heldObject.transform.parent = null;
+            }
+            // Debugging: Draw the ray in the Scene view
+            Debug.DrawRay(playerCamera.position, playerCamera.forward * pickUpRange, Color.red, 2f);
+
+            if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.gameObject.CompareTag("Interactable"))
+            {
+                // Pick up the object
+                // Disable physics
+
+                if (hit.collider.gameObject.name.Equals("Orb"))
+                {
+                    orbGameObject = hit.collider.gameObject;
+                    orbGameObject.GetComponent<Rigidbody>().isKinematic = true;
+                    orbGameObject.transform.position = orbPosition.position;
+                    orbGameObject.transform.rotation = orbPosition.rotation;
+                    orbGameObject.transform.parent = orbPosition;
+
+                    orbScale = orbGameObject.transform.localScale;
+                } 
+                else{
+                    heldObject = hit.collider.gameObject;
+                    heldObject.GetComponent<Rigidbody>().isKinematic = true;
+                    // Attach the object to the hold position
+                    heldObject.transform.position = holdPosition.position;
+                    heldObject.transform.rotation = holdPosition.rotation;
+                    heldObject.transform.parent = holdPosition;
+
+                    heldObjectScale = heldObject.transform.localScale;
+                }
+            }
+        }
+    }
+
+    public void Crouch()
+    {
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,crouchHeight, 
+            gameObject.transform.localScale.z);
+        crouched = true;
+
+        if (orbGameObject != null)
+        {
+            orbGameObject.transform.localScale = new Vector3(orbScale.x, orbScale.y * (1/crouchHeight), orbScale.z);
+        }
         if (heldObject != null)
         {
-            heldObject.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
-            heldObject.transform.parent = null;
+            heldObject.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1/crouchHeight), heldObjectScale.z);
         }
-
-        // Perform a raycast from the camera's position forward
-        Ray ray = new Ray(playerCamera.position, playerCamera.forward);
-        RaycastHit hit;
-
-        // Debugging: Draw the ray in the Scene view
-        Debug.DrawRay(playerCamera.position, playerCamera.forward * pickUpRange, Color.red, 2f);
-
-
-        if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.gameObject.CompareTag("Interactable"))
+    }
+    
+    public void unCrouch()
+    {
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,1, 
+            gameObject.transform.localScale.z);
+        crouched = false;
+        if (orbGameObject != null)
         {
-            // Pick up the object
-            heldObject = hit.collider.gameObject;
-            heldObject.GetComponent<Rigidbody>().isKinematic = true; // Disable physics
-
-            // Attach the object to the hold position
-            heldObject.transform.position = holdPosition.position;
-            heldObject.transform.rotation = holdPosition.rotation;
-            heldObject.transform.parent = holdPosition;
+            orbGameObject.transform.localScale = orbScale;
+        }
+        if (heldObject != null)
+        {
+            heldObject.transform.localScale = heldObjectScale;
         }
     }
 }
-//just so it submits :3
