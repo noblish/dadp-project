@@ -24,7 +24,7 @@
                     "initialStateCheck": true
                 },
                 {
-                    "name": "Interaction",
+                    "name": "Pick Up",
                     "type": "Button",
                     "id": "aeaaa079-ffde-4087-b979-421a93b4ae50",
                     "expectedControlType": "Button",
@@ -189,7 +189,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "Keyboard",
-                    "action": "Interaction",
+                    "action": "Pick Up",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -200,7 +200,18 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "Keyboard",
-                    "action": "Interaction",
+                    "action": "Pick Up",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "3350bbe3-4060-49de-b85f-46ccc98289a0",
+                    "path": "<Gamepad>/buttonSouth",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Gamepad",
+                    "action": "Pick Up",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
