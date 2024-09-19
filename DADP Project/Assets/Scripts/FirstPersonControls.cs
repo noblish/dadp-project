@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UIElements;
 
 public class FirstPersonControls : MonoBehaviour
 {
@@ -21,7 +23,7 @@ public class FirstPersonControls : MonoBehaviour
     private Vector3 velocity; // Velocity of the player
 
     private CharacterController characterController; // Reference to the CharacterController component
-    
+
     public Transform holdPosition; // Position where the picked-up object will be held
     public Transform orbPosition;
 
@@ -33,7 +35,15 @@ public class FirstPersonControls : MonoBehaviour
     private Vector3 heldObjectScale;
 
     private bool crouched;
-    
+
+    public GameObject[] objectsToChangeColor;
+    public Material switchMaterial;
+
+    public bool climbState = false;
+
+    public Transform lastCheckpoint;
+    private Vector3 checkpointDistance;
+
     private void Awake()
     {
         // Get and store the CharacterController component attached to this GameObject
@@ -64,9 +74,15 @@ public class FirstPersonControls : MonoBehaviour
 
         // Subscribe to the jump input event
         playerInput.Player.Jump.performed += ctx => Jump(); // Call the Jump method when jump input is performed
-        
+
         // Subscribe to the pick-up input event
         playerInput.Player.Interaction.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
+
+    }
+
+    private void Start()
+    {
+        ;
     }
 
     private void Update()
@@ -74,7 +90,10 @@ public class FirstPersonControls : MonoBehaviour
         // Call Move and LookAround methods every frame to handle player movement and camera rotation
         Move();
         LookAround();
-        ApplyGravity();
+        if (!climbState)
+        {
+            ApplyGravity();
+        }
     }
 
     public void Move()
@@ -94,7 +113,7 @@ public class FirstPersonControls : MonoBehaviour
         {
             characterController.Move(move * (crouchSpeed * Time.deltaTime));
         }
-        
+
     }
 
     public void LookAround()
@@ -138,7 +157,7 @@ public class FirstPersonControls : MonoBehaviour
     {
         if (!crouched)
         {
-            
+
             Ray ray = new Ray(playerCamera.position, playerCamera.forward);
             RaycastHit hit;
 
@@ -164,8 +183,10 @@ public class FirstPersonControls : MonoBehaviour
                     orbGameObject.transform.parent = orbPosition;
 
                     orbScale = orbGameObject.transform.localScale;
-                } 
-                else{
+                }
+
+                else
+                {
                     heldObject = hit.collider.gameObject;
                     heldObject.GetComponent<Rigidbody>().isKinematic = true;
                     // Attach the object to the hold position
@@ -176,28 +197,33 @@ public class FirstPersonControls : MonoBehaviour
                     heldObjectScale = heldObject.transform.localScale;
                 }
             }
+            else if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.CompareTag("Door")) // Check if the object is a door
+            {
+                // Start moving the door upwards
+                StartCoroutine(RaiseDoor(hit.collider.gameObject));
+            }
         }
     }
 
     public void Crouch()
     {
-        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,crouchHeight, 
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, crouchHeight,
             gameObject.transform.localScale.z);
         crouched = true;
 
         if (orbGameObject != null)
         {
-            orbGameObject.transform.localScale = new Vector3(orbScale.x, orbScale.y * (1/crouchHeight), orbScale.z);
+            orbGameObject.transform.localScale = new Vector3(orbScale.x, orbScale.y * (1 / crouchHeight), orbScale.z);
         }
         if (heldObject != null)
         {
-            heldObject.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1/crouchHeight), heldObjectScale.z);
+            heldObject.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1 / crouchHeight), heldObjectScale.z);
         }
     }
-    
+
     public void unCrouch()
     {
-        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,1, 
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, 1,
             gameObject.transform.localScale.z);
         crouched = false;
         if (orbGameObject != null)
@@ -207,6 +233,59 @@ public class FirstPersonControls : MonoBehaviour
         if (heldObject != null)
         {
             heldObject.transform.localScale = heldObjectScale;
+        }
+    }
+
+    public void Interact()
+    {
+        // Perform a raycast to detect the lightswitch
+        Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, pickUpRange))
+        {
+            if (hit.collider.CompareTag("Switch")) // Assuming the switch has this tag
+            {
+                // Change the material color of the objects in the array
+                foreach (GameObject obj in objectsToChangeColor)
+                {
+                    Renderer renderer = obj.GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        renderer.material.color = switchMaterial.color; //Set the color to match the switch material color
+                    }
+                }
+            }
+
+        }
+    }
+    private IEnumerator RaiseDoor(GameObject door)
+    {
+        float raiseAmount = 5f; // The total distance the door will be raised
+        float raiseSpeed = 2f; // The speed at which the door will be raised
+        Vector3 startPosition = door.transform.position; // Store the initial position of the door
+        Vector3 endPosition = startPosition + Vector3.up * raiseAmount; // Calculate the final position of the door after raising
+                                                                        // Continue raising the door until it reaches the target height
+        while (door.transform.position.y < endPosition.y)
+        {
+            // Move the door towards the target position at the specified speed
+            door.transform.position =
+                Vector3.MoveTowards(door.transform.position, endPosition, raiseSpeed *
+                                                                          Time.deltaTime);
+            yield return null; // Wait until the next frame before continuing the loop
+        }
+    }
+
+    public void CheckpointTeleport()
+    {
+        if (orbGameObject != null || heldObject != null)
+        {
+            transform.position = lastCheckpoint.position;
+            heldObject.transform.position = holdPosition.position;
+            orbGameObject.transform.position = orbPosition.position;
+        }
+        else
+        {
+            transform.position = lastCheckpoint.position;
         }
     }
 }
