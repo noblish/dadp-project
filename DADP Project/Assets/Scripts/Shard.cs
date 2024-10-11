@@ -34,4 +34,6 @@ public class Shard : MonoBehaviour
         return shardState;
     }
 
+    
+
 }

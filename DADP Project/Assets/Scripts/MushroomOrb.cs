@@ -15,7 +15,7 @@ public class MushroomOrb : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.gameObject.name == "crystalshard")
+        if (other.gameObject.name == "Crystal Shard")
         {
             if (other.GetComponent<Shard>().getShardState())
             {

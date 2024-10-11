@@ -1,7 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UIElements;
 
 public class FirstPersonControls : MonoBehaviour
 {
@@ -21,25 +24,49 @@ public class FirstPersonControls : MonoBehaviour
     private Vector3 velocity; // Velocity of the player
 
     private CharacterController characterController; // Reference to the CharacterController component
-    
-    public Transform holdPosition; // Position where the picked-up object will be held
-    public Transform orbPosition;
 
-    private GameObject heldObject;
-    private GameObject orbGameObject;// Reference to the currently held object
+    public Transform holdPosition1; // Position where the picked-up object will be held
+    public Transform holdPosition2;
+
+    private GameObject heldObject1;
+    private GameObject heldObject2;
+    
     public float pickUpRange = 3f;
 
     private Vector3 orbScale;
     private Vector3 heldObjectScale;
 
     private bool crouched;
+
+    public GameObject[] objectsToChangeColor;
+    public Material switchMaterial;
+
+    public bool swimState = true;
+
+    public Transform lastCheckpoint;
+    private Vector3 checkpointDistance;
+    
+    public TextMeshProUGUI pickUpText;
+
+    public PauseMenu PauseMenu;
+
+    public GameObject[] orbArr = new GameObject[4];
+    
+    
     
     private void Awake()
     {
         // Get and store the CharacterController component attached to this GameObject
         characterController = GetComponent<CharacterController>();
+
+        for (int i = 0; i < orbArr.Length; i++)
+        {
+            orbArr[i].SetActive(false);
+        }
     }
 
+    
+    
     private void OnEnable()
     {
         // Create a new instance of the input actions
@@ -53,8 +80,8 @@ public class FirstPersonControls : MonoBehaviour
             ctx => moveInput = ctx.ReadValue<Vector2>(); // Update moveInput when movement input is performed
         playerInput.Player.Movement.canceled +=
             ctx => moveInput = Vector2.zero; // Reset moveInput when movement input is canceled
-        playerInput.Player.Crouch.performed += ctx => Crouch();
-        playerInput.Player.Crouch.canceled += ctx => unCrouch();
+        // playerInput.Player.Crouch.performed += ctx => Crouch();
+        // playerInput.Player.Crouch.canceled += ctx => unCrouch();
 
         // Subscribe to the look input events
         playerInput.Player.Look.performed +=
@@ -64,17 +91,33 @@ public class FirstPersonControls : MonoBehaviour
 
         // Subscribe to the jump input event
         playerInput.Player.Jump.performed += ctx => Jump(); // Call the Jump method when jump input is performed
-        
+
         // Subscribe to the pick-up input event
         playerInput.Player.Interaction.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
+
     }
 
     private void Update()
     {
         // Call Move and LookAround methods every frame to handle player movement and camera rotation
-        Move();
-        LookAround();
-        ApplyGravity();
+        if (!PauseMenu.PausedGame)
+        {
+            LookAround();
+            CheckForPickUp();
+        }
+        
+        if (!swimState)
+        {
+            Move();
+            ApplyGravity();
+            //Debug.Log("NOT SWIMMING");
+        }
+
+        if (swimState)
+        {
+            //Debug.Log("SWIMMING - " + playerCamera.localEulerAngles.x);
+            SwimMovement();
+        }
     }
 
     public void Move()
@@ -94,7 +137,7 @@ public class FirstPersonControls : MonoBehaviour
         {
             characterController.Move(move * (crouchSpeed * Time.deltaTime));
         }
-        
+
     }
 
     public void LookAround()
@@ -120,7 +163,6 @@ public class FirstPersonControls : MonoBehaviour
         {
             velocity.y = -0.5f; // Small value to keep the player grounded
         }
-
         velocity.y += gravity * Time.deltaTime; // Apply gravity to the velocity
         characterController.Move(velocity * Time.deltaTime); // Apply the velocity to the character
     }
@@ -138,75 +180,199 @@ public class FirstPersonControls : MonoBehaviour
     {
         if (!crouched)
         {
-            
             Ray ray = new Ray(playerCamera.position, playerCamera.forward);
             RaycastHit hit;
 
-            if (heldObject != null)
+            if (heldObject1 != null && heldObject2 != null)
             {
-                heldObject.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
-                heldObject.transform.parent = null;
+                heldObject1.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
+                heldObject1.transform.parent = null;
+                heldObject1 = null;
             }
             // Debugging: Draw the ray in the Scene view
             Debug.DrawRay(playerCamera.position, playerCamera.forward * pickUpRange, Color.red, 2f);
-
+            
             if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.gameObject.CompareTag("Interactable"))
             {
                 // Pick up the object
                 // Disable physics
 
-                if (hit.collider.gameObject.name.Equals("Orb"))
+                if (hit.collider.gameObject.name.Contains("Orb"))
                 {
-                    orbGameObject = hit.collider.gameObject;
-                    orbGameObject.GetComponent<Rigidbody>().isKinematic = true;
-                    orbGameObject.transform.position = orbPosition.position;
-                    orbGameObject.transform.rotation = orbPosition.rotation;
-                    orbGameObject.transform.parent = orbPosition;
-
-                    orbScale = orbGameObject.transform.localScale;
-                } 
-                else{
-                    heldObject = hit.collider.gameObject;
-                    heldObject.GetComponent<Rigidbody>().isKinematic = true;
-                    // Attach the object to the hold position
-                    heldObject.transform.position = holdPosition.position;
-                    heldObject.transform.rotation = holdPosition.rotation;
-                    heldObject.transform.parent = holdPosition;
-
-                    heldObjectScale = heldObject.transform.localScale;
+                    Debug.Log("ORB!!!");
+                    switch (hit.collider.gameObject.name)
+                    {
+                        case "Egg Orb":
+                            orbArr[0].SetActive(true);
+                            hit.collider.gameObject.SetActive(false);
+                            break;
+                        case "Mushroom Orb":
+                            orbArr[1].SetActive(true);
+                            hit.collider.gameObject.SetActive(false);
+                            break;
+                        case "Hand Orb":
+                            orbArr[2].SetActive(true);
+                            hit.collider.gameObject.SetActive(false);
+                            break;
+                        case "Geode Orb":
+                            orbArr[3].SetActive(true);
+                            hit.collider.gameObject.SetActive(false);
+                            break;
+                    }
+                }
+                else
+                {
+                    if (heldObject1 == null || heldObject2 == null)
+                    {
+                        if (heldObject1 == null)
+                        {
+                            heldObject1 = hit.collider.gameObject;
+                            hit.collider.gameObject.transform.parent = holdPosition1;
+                            heldObject1.GetComponent<Rigidbody>().isKinematic = true;
+                            heldObject1.transform.position = holdPosition1.position;
+                            if (hit.collider.gameObject.name == "Tablet")
+                            {
+                                heldObject1.transform.position += new Vector3(-0.35f, -0.45f, 1.85f);
+                            }
+                        }
+                        else
+                        {
+                            heldObject2 = hit.collider.gameObject;
+                            hit.collider.gameObject.transform.parent = holdPosition2;
+                            heldObject2.GetComponent<Rigidbody>().isKinematic = true;
+                            heldObject2.transform.position = holdPosition2.position;
+                            if (hit.collider.gameObject.name == "Tablet")
+                            {
+                                heldObject1.transform.position += new Vector3(-0.35f, -0.45f, 1.85f);
+                            }
+                        }
+                    }
                 }
             }
+            else if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.CompareTag("Door")) // Check if the object is a door
+            {
+                // Start moving the door upwards
+                StartCoroutine(RaiseDoor(hit.collider.gameObject));
+            }
+        }
+        else
+        {
+            
         }
     }
 
-    public void Crouch()
+    /*public void Crouch()
     {
-        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,crouchHeight, 
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, crouchHeight,
             gameObject.transform.localScale.z);
         crouched = true;
 
-        if (orbGameObject != null)
+        if (heldObject1 != null || heldObject2 != null)
         {
-            orbGameObject.transform.localScale = new Vector3(orbScale.x, orbScale.y * (1/crouchHeight), orbScale.z);
+            heldObject1.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1 / crouchHeight), heldObjectScale.z);
+            heldObject2.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1 / crouchHeight), heldObjectScale.z);
         }
-        if (heldObject != null)
+    }
+
+    public void unCrouch()
+    {
+        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, 1,
+            gameObject.transform.localScale.z);
+        crouched = false;
+        
+        if (heldObject1 != null || heldObject2 != null)
         {
-            heldObject.transform.localScale = new Vector3(heldObjectScale.x, heldObjectScale.y * (1/crouchHeight), heldObjectScale.z);
+            heldObject1.transform.localScale = heldObjectScale;
+            heldObject2.transform.localScale = heldObjectScale;
+        }
+    }*/
+
+    public void Interact()
+    {
+        // Perform a raycast to detect the lightswitch
+        Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, pickUpRange))
+        {
+            if (hit.collider.CompareTag("Switch")) // Assuming the switch has this tag
+            {
+                // Change the material color of the objects in the array
+                foreach (GameObject obj in objectsToChangeColor)
+                {
+                    Renderer renderer = obj.GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        renderer.material.color = switchMaterial.color; //Set the color to match the switch material color
+                    }
+                }
+            }
+
+        }
+    }
+    private IEnumerator RaiseDoor(GameObject door)
+    {
+        float raiseAmount = 5f; // The total distance the door will be raised
+        float raiseSpeed = 2f; // The speed at which the door will be raised
+        Vector3 startPosition = door.transform.position; // Store the initial position of the door
+        Vector3 endPosition = startPosition + Vector3.up * raiseAmount; // Calculate the final position of the door after raising
+                                                                        // Continue raising the door until it reaches the target height
+        while (door.transform.position.y < endPosition.y)
+        {
+            // Move the door towards the target position at the specified speed
+            door.transform.position =
+                Vector3.MoveTowards(door.transform.position, endPosition, raiseSpeed *
+                                                                          Time.deltaTime);
+            yield return null; // Wait until the next frame before continuing the loop
         }
     }
     
-    public void unCrouch()
+
+    public void SwimMovement()
     {
-        gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x,1, 
-            gameObject.transform.localScale.z);
-        crouched = false;
-        if (orbGameObject != null)
+        Vector3 move = new Vector3();
+        if(AngleToSpectrum(playerCamera.localEulerAngles.x) <= 0)
         {
-            orbGameObject.transform.localScale = orbScale;
+            
+            move = new Vector3(moveInput.x,  (AngleToSpectrum(playerCamera.localEulerAngles.x)/2) + 0.2f, moveInput.y);
         }
-        if (heldObject != null)
+        else
         {
-            heldObject.transform.localScale = heldObjectScale;
+            move = new Vector3(moveInput.x,  (AngleToSpectrum(playerCamera.localEulerAngles.x)/6) + 0.2f, moveInput.y);
+        }
+        move = transform.TransformDirection(move);
+        characterController.Move(move * (moveSpeed * Time.deltaTime));
+    }
+
+    private float AngleToSpectrum(float angleInput)
+    {
+        float result = (angleInput - 180) / 90;
+        return result;
+    }
+    
+    private void CheckForPickUp()
+    {
+        Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+        RaycastHit hit;
+// Perform raycast to detect objects
+        if (Physics.Raycast(ray, out hit, pickUpRange))
+        {
+// Check if the object has the "PickUp" tag
+            if (hit.collider.CompareTag("Interactable"))
+            {
+// Display the pick-up text
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = hit.collider.gameObject.name + "\nPickup with 'E'";
+            }
+            else
+            {
+// Hide the pick-up text if not looking at a "PickUp" object
+                pickUpText.gameObject.SetActive(false);
+            }
+        }
+        else
+        {
+// Hide the text if not looking at any object
+            pickUpText.gameObject.SetActive(false);
         }
     }
 }
