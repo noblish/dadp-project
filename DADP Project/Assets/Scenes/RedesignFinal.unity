@@ -12672,7 +12672,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: FUCKING AA
+  m_text: Quit
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -41500,10 +41500,10 @@ MonoBehaviour:
   orbSpot: {fileID: 1757243690}
   promptUI: {fileID: 0}
   coinArr:
-  - {fileID: 1066755063}
-  - {fileID: 1224944282}
+  - {fileID: 1296941637}
+  - {fileID: 741433679}
   coinCount: 0
-  pickupText: Offer a Coin
+  pickupText: Offer a Coin with E
 --- !u!65 &1563699016
 BoxCollider:
   m_ObjectHideFlags: 0
