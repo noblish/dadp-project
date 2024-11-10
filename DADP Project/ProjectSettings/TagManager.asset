@@ -11,6 +11,7 @@ TagManager:
   - Door
   - Ladder
   - Water
+  - Tablet
   layers:
   - Default
   - TransparentFX

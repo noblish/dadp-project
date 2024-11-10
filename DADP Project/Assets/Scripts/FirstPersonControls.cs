@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Assertions.Must;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 public class FirstPersonControls : MonoBehaviour
@@ -47,26 +49,46 @@ public class FirstPersonControls : MonoBehaviour
     private Vector3 checkpointDistance;
     
     public TextMeshProUGUI pickUpText;
+    public TextMeshProUGUI messageText;
 
     public PauseMenu PauseMenu;
+    public GameObject pauseCanvas;
 
     public GameObject[] orbArr = new GameObject[4];
-    
-    
-    
+
+    public bool toolState;
+    private GameObject OrbTrigger;
+
+    private bool toolStateMush;
+    private bool toolStateHand;
+    private bool toolStateEgg;
+    private bool toolStateGeo;
+
+    //Animator
+    [SerializeField]
+    private Animator animator;
+
+    private int orbCount = 0;
     private void Awake()
     {
         // Get and store the CharacterController component attached to this GameObject
+        animator = GetComponent<Animator>();
         characterController = GetComponent<CharacterController>();
-
         for (int i = 0; i < orbArr.Length; i++)
         {
             orbArr[i].SetActive(false);
         }
+
+        toolState = false;
+        toolStateEgg = false;
+        toolStateGeo = false;
+        toolStateMush = false;
+        toolStateHand = false;
+        
+        heldObject2 = new GameObject("thing");
+
     }
 
-    
-    
     private void OnEnable()
     {
         // Create a new instance of the input actions
@@ -82,6 +104,7 @@ public class FirstPersonControls : MonoBehaviour
             ctx => moveInput = Vector2.zero; // Reset moveInput when movement input is canceled
         // playerInput.Player.Crouch.performed += ctx => Crouch();
         // playerInput.Player.Crouch.canceled += ctx => unCrouch();
+        GameStateManager.Instance.OnGameStateChanged += OnGameStateChanged;
 
         // Subscribe to the look input events
         playerInput.Player.Look.performed +=
@@ -95,28 +118,48 @@ public class FirstPersonControls : MonoBehaviour
         // Subscribe to the pick-up input event
         playerInput.Player.Interaction.performed += ctx => PickUpObject(); // Call the PickUpObject method when pick-up input is performed
 
+        
     }
 
     private void Update()
     {
+
+        //animator.SetBool("SwimState", swimState);
         // Call Move and LookAround methods every frame to handle player movement and camera rotation
         if (!PauseMenu.PausedGame)
         {
+            // pauseCanvas.gameObject.SetActive(false);
             LookAround();
             CheckForPickUp();
         }
-        
+        if (PauseMenu.PausedGame)
+        {
+            // pauseCanvas.gameObject.SetActive(true);
+        }
+
         if (!swimState)
         {
             Move();
             ApplyGravity();
             //Debug.Log("NOT SWIMMING");
+            animator.SetBool("SwimState", true);
+        }
+        else
+        {
+            animator.SetBool("SwimState", false);
         }
 
         if (swimState)
         {
             //Debug.Log("SWIMMING - " + playerCamera.localEulerAngles.x);
             SwimMovement();
+            
+        }
+
+        if (orbCount == 4)
+        {
+            Debug.Log("Finished!");
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
         }
     }
 
@@ -127,16 +170,20 @@ public class FirstPersonControls : MonoBehaviour
 
         // Transform direction from local to world space
         move = transform.TransformDirection(move);
+        
+
 
         // Move the character controller based on the movement vector and speed
         if (!crouched)
         {
+            
             characterController.Move(move * (moveSpeed * Time.deltaTime));
         }
         else
         {
-            characterController.Move(move * (crouchSpeed * Time.deltaTime));
+            //animator.SetBool("IsSwimming", false);
         }
+        
 
     }
 
@@ -183,81 +230,167 @@ public class FirstPersonControls : MonoBehaviour
             Ray ray = new Ray(playerCamera.position, playerCamera.forward);
             RaycastHit hit;
 
-            if (heldObject1 != null && heldObject2 != null)
+            if (Physics.Raycast(ray, out hit, pickUpRange) && heldObject1 != null && 
+                !(hit.collider.gameObject.CompareTag("Interactable") 
+                  || hit.collider.gameObject.CompareTag("Interact (Stationary)")))
             {
                 heldObject1.GetComponent<Rigidbody>().isKinematic = false; // Enable physics
                 heldObject1.transform.parent = null;
                 heldObject1 = null;
             }
+
             // Debugging: Draw the ray in the Scene view
             Debug.DrawRay(playerCamera.position, playerCamera.forward * pickUpRange, Color.red, 2f);
-            
-            if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.gameObject.CompareTag("Interactable"))
+
+            if (Physics.Raycast(ray, out hit, pickUpRange) 
+                && (hit.collider.gameObject.CompareTag("Interactable") 
+                    || hit.collider.gameObject.CompareTag("Interact (Stationary)")))
             {
                 // Pick up the object
                 // Disable physics
-
-                if (hit.collider.gameObject.name.Contains("Orb"))
+                
+                if (hit.collider.gameObject.CompareTag("Interactable"))
                 {
-                    Debug.Log("ORB!!!");
-                    switch (hit.collider.gameObject.name)
+                    if (hit.collider.gameObject.name.Contains("Orb"))
                     {
+                        Debug.Log("ORB!!!");
+                        StartCoroutine(Message("Orb Collected!"));
+                        switch (hit.collider.gameObject.name)
+                        {
                         case "Egg Orb":
                             orbArr[0].SetActive(true);
                             hit.collider.gameObject.SetActive(false);
+                            orbCount += 1;
                             break;
                         case "Mushroom Orb":
                             orbArr[1].SetActive(true);
                             hit.collider.gameObject.SetActive(false);
+                            orbCount += 1;
                             break;
                         case "Hand Orb":
                             orbArr[2].SetActive(true);
                             hit.collider.gameObject.SetActive(false);
+                            orbCount += 1;
                             break;
                         case "Geode Orb":
                             orbArr[3].SetActive(true);
                             hit.collider.gameObject.SetActive(false);
+                            orbCount += 1;
                             break;
+                        }
                     }
-                }
-                else
-                {
-                    if (heldObject1 == null || heldObject2 == null)
+                    else
                     {
-                        if (heldObject1 == null)
+                        if (heldObject1 == null || heldObject2 == null)
                         {
-                            heldObject1 = hit.collider.gameObject;
-                            hit.collider.gameObject.transform.parent = holdPosition1;
-                            heldObject1.GetComponent<Rigidbody>().isKinematic = true;
-                            heldObject1.transform.position = holdPosition1.position;
-                            if (hit.collider.gameObject.name == "Tablet")
+                            if (heldObject1 == null)
                             {
-                                heldObject1.transform.position += new Vector3(-0.35f, -0.45f, 1.85f);
+                                heldObject1 = hit.collider.gameObject;
+                                hit.collider.gameObject.transform.parent = holdPosition1;
+                                heldObject1.GetComponent<Rigidbody>().isKinematic = true;
+                                heldObject1.transform.position = holdPosition1.position;
+                                
                             }
-                        }
-                        else
-                        {
-                            heldObject2 = hit.collider.gameObject;
-                            hit.collider.gameObject.transform.parent = holdPosition2;
-                            heldObject2.GetComponent<Rigidbody>().isKinematic = true;
-                            heldObject2.transform.position = holdPosition2.position;
-                            if (hit.collider.gameObject.name == "Tablet")
+                            else
                             {
-                                heldObject1.transform.position += new Vector3(-0.35f, -0.45f, 1.85f);
+                                heldObject2 = hit.collider.gameObject;
+                                hit.collider.gameObject.transform.parent = holdPosition2;
+                                heldObject2.GetComponent<Rigidbody>().isKinematic = true;
+                                heldObject2.transform.position = holdPosition2.position;
+                                
                             }
                         }
                     }
                 }
+                
+                if (toolState && hit.collider.gameObject.CompareTag("Interact (Stationary)"))
+                {
+                    if(heldObject1 != null)
+                    {
+                        switch (heldObject1.name)
+                        {
+                            case "Pickaxe":
+                                OrbTrigger.GetComponent<GeodeOrb>().ToolUsage(heldObject1);
+                                if (toolStateGeo)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject1.SetActive(false);
+                                }
+
+                                break;
+                            case "Crystal Shard":
+                                OrbTrigger.GetComponent<MushroomOrb>().ToolUsage(heldObject1);
+                                if (toolStateMush)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject1.gameObject.SetActive(false);
+                                }
+
+                                break;
+                            case "Coin":
+                                OrbTrigger.GetComponent<HandOrb>().ToolUsage(heldObject1);
+                                if (toolStateHand)
+                                {
+                                    if (OrbTrigger.GetComponent<HandOrb>().coinCount == 2)
+                                    {
+                                        hit.collider.gameObject.SetActive(false);
+                                    }
+                                    heldObject1.gameObject.SetActive(false);
+                                }
+
+                                break;
+                            case "Stone Tablet":
+                                OrbTrigger.GetComponent<WaterOrb>().ToolUsage(heldObject1);
+                                if (toolStateEgg)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject1.gameObject.SetActive(false);
+                                }
+
+                                break;
+                        }
+                    }
+                    
+                    if (heldObject2 != null)
+                    {
+                        switch (heldObject2.name)
+                        {
+                            case "Pickaxe":
+                                OrbTrigger.GetComponent<GeodeOrb>().ToolUsage(heldObject2);
+                                if(toolStateGeo)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject2.SetActive(false);
+                                }
+                                break;
+                            case "Shard":
+                                OrbTrigger.GetComponent<MushroomOrb>().ToolUsage(heldObject2);
+                                if(toolStateMush)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject2.gameObject.SetActive(false);
+                                }
+                                break;
+                            case "Coin":
+                                OrbTrigger.GetComponent<HandOrb>().ToolUsage(heldObject2);
+                                if(toolStateHand)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject2.gameObject.SetActive(false);
+                                }
+                                break;
+                            case "Tablet":
+                                OrbTrigger.GetComponent<WaterOrb>().ToolUsage(heldObject2);
+                                if(toolStateEgg)
+                                {
+                                    hit.collider.gameObject.SetActive(false);
+                                    heldObject2.gameObject.SetActive(false);
+                                }
+                                break;
+                        }
+                    }
+                } 
             }
-            else if (Physics.Raycast(ray, out hit, pickUpRange) && hit.collider.CompareTag("Door")) // Check if the object is a door
-            {
-                // Start moving the door upwards
-                StartCoroutine(RaiseDoor(hit.collider.gameObject));
-            }
-        }
-        else
-        {
-            
         }
     }
 
@@ -287,7 +420,7 @@ public class FirstPersonControls : MonoBehaviour
         }
     }*/
 
-    public void Interact()
+    /*public void Interact()
     {
         // Perform a raycast to detect the lightswitch
         Ray ray = new Ray(playerCamera.position, playerCamera.forward);
@@ -308,8 +441,8 @@ public class FirstPersonControls : MonoBehaviour
             }
 
         }
-    }
-    private IEnumerator RaiseDoor(GameObject door)
+    }*/
+    /*private IEnumerator RaiseDoor(GameObject door)
     {
         float raiseAmount = 5f; // The total distance the door will be raised
         float raiseSpeed = 2f; // The speed at which the door will be raised
@@ -324,23 +457,31 @@ public class FirstPersonControls : MonoBehaviour
                                                                           Time.deltaTime);
             yield return null; // Wait until the next frame before continuing the loop
         }
-    }
+    }*/
     
 
     public void SwimMovement()
     {
         Vector3 move = new Vector3();
-        if(AngleToSpectrum(playerCamera.localEulerAngles.x) <= 0)
+
+        
+
+
+        if (AngleToSpectrum(playerCamera.localEulerAngles.x) <= 0)
         {
-            
-            move = new Vector3(moveInput.x,  (AngleToSpectrum(playerCamera.localEulerAngles.x)/2) + 0.2f, moveInput.y);
+          
+            move = new Vector3(moveInput.x,  
+                (AngleToSpectrum(playerCamera.localEulerAngles.x)/2) + 0.2f, moveInput.y);
         }
         else
         {
-            move = new Vector3(moveInput.x,  (AngleToSpectrum(playerCamera.localEulerAngles.x)/6) + 0.2f, moveInput.y);
+            
+            move = new Vector3(moveInput.x, 
+                (AngleToSpectrum(playerCamera.localEulerAngles.x)/6) + 0.2f, moveInput.y);
         }
         move = transform.TransformDirection(move);
         characterController.Move(move * (moveSpeed * Time.deltaTime));
+
     }
 
     private float AngleToSpectrum(float angleInput)
@@ -363,16 +504,112 @@ public class FirstPersonControls : MonoBehaviour
                 pickUpText.gameObject.SetActive(true);
                 pickUpText.text = hit.collider.gameObject.name + "\nPickup with 'E'";
             }
-            else
+            else if (hit.collider.CompareTag("Tablet"))
             {
-// Hide the pick-up text if not looking at a "PickUp" object
-                pickUpText.gameObject.SetActive(false);
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = hit.collider.gameObject.GetComponent<Description>().ReturnDescription();
             }
+             else if (!hit.collider.CompareTag("Interact (Stationary)"))
+             {
+ // Hide the pick-up text if not looking at a "PickUp" object
+                 pickUpText.gameObject.SetActive(false);
+             }
         }
-        else
-        {
-// Hide the text if not looking at any object
-            pickUpText.gameObject.SetActive(false);
+         else
+         {
+ // Hide the text if not looking at any object
+             pickUpText.gameObject.SetActive(false);
+         }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        switch (other.name)
+        { 
+            case "Mushroom Orb Trigger":
+                OrbTrigger = other.gameObject;
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = other.GetComponent<MushroomOrb>().pickupText;
+                toolState = true;
+                toolStateMush = true;
+                Debug.Log(toolState);
+                break;
+            case "Geode Orb Trigger":
+                OrbTrigger = other.gameObject;
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = other.GetComponent<GeodeOrb>().pickupText;
+                toolState = true;
+                toolStateGeo = true;
+                break;
+            case "Hand Orb Trigger":
+                OrbTrigger = other.gameObject;
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = other.GetComponent<HandOrb>().pickupText;
+                toolState = true;
+                toolStateHand = true;
+                break;
+            case "Egg Orb Trigger":
+                OrbTrigger = other.gameObject;
+                pickUpText.gameObject.SetActive(true);
+                pickUpText.text = other.GetComponent<WaterOrb>().pickupText;
+                toolState = true;
+                toolStateEgg = true;
+                break;
         }
+    }
+
+   
+    private void OnTriggerExit(Collider other)
+    {
+        switch (other.name)
+        { 
+            case "Mushroom Orb Trigger":
+                pickUpText.gameObject.SetActive(false);
+                toolState = false;
+                toolStateEgg = false;
+                toolStateGeo = false;
+                toolStateHand = false;
+                toolStateMush = false;
+                break;
+            case "Geode Orb Trigger":
+                pickUpText.gameObject.SetActive(false);
+                toolState = false;
+                toolStateEgg = false;
+                toolStateGeo = false;
+                toolStateHand = false;
+                toolStateMush = false;
+                break;
+            case "Hand Orb Trigger":
+                pickUpText.gameObject.SetActive(false);
+                toolState = false;
+                toolStateEgg = false;
+                toolStateGeo = false;
+                toolStateHand = false;
+                toolStateMush = false;
+                break;
+            case "Egg Orb Trigger":
+                pickUpText.gameObject.SetActive(false);
+                toolState = false;
+                toolStateEgg = false;
+                toolStateGeo = false;
+                toolStateHand = false;
+                toolStateMush = false;
+                break;
+        }
+    }
+    
+    private void OnGameStateChanged(GameState newGameState)
+    {
+        enabled = newGameState == GameState.Gameplay;
+    }
+
+    public IEnumerator Message(string message)
+    {
+        messageText.gameObject.SetActive(true);
+        Debug.Log("ON");
+        messageText.text = message;
+        yield return new WaitForSeconds(5f);
+        messageText.gameObject.SetActive(false);
+        Debug.Log("OFF");
     }
 }

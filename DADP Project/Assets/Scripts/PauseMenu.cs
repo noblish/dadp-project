@@ -15,13 +15,6 @@ public class PauseMenu : MonoBehaviour
         PauseMenuUI.SetActive(false);
         PausedGame = false;
     }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
     private void OnEnable()
     {
         var playerInput = new Controls();
@@ -32,19 +25,26 @@ public class PauseMenu : MonoBehaviour
 
     public void PauseGame()
     {
-        if (PausedGame)
-        {
-            PauseMenuUI.SetActive(false);
-            Time.timeScale = 1f;
-            PausedGame = false;
-            Debug.Log("UNPAUSED");
-        }
-        else
-        {
-            PauseMenuUI.SetActive(true);
-            Time.timeScale = 0f;
-            PausedGame = true;
-            Debug.Log("PAUSED");
-        }
+            GameState currentGameState = GameStateManager.Instance.CurrentGameState;
+            GameState newGameState = currentGameState == GameState.Gameplay
+                ? GameState.Paused
+                : GameState.Gameplay;
+ 
+            GameStateManager.Instance.SetState(newGameState);
+            
+            if (GameStateManager.Instance.CurrentGameState == GameState.Paused)
+            {
+                PauseMenuUI.SetActive(true);
+            }
+            else
+            {
+                PauseMenuUI.SetActive(false);
+            }
+    }
+
+    public void QuitGame()
+    {
+        Application.Quit();
+        Debug.Log("Quit");
     }
 }

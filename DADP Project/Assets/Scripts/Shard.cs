@@ -9,6 +9,7 @@ public class Shard : MonoBehaviour
     public Material ShardMaterial;
     public Material ShardHeatedMaterial;
     private bool shardState = false;
+    public FirstPersonControls player;
 
     private void Start()
     {
@@ -20,11 +21,13 @@ public class Shard : MonoBehaviour
         if (other.gameObject.CompareTag("Lava"))
         {
             Debug.Log("Hot!");
+            player.StartCoroutine(player.Message("Shard Heated"));
             GetComponent<MeshRenderer>().sharedMaterial = ShardHeatedMaterial;
             shardState = true;
         }
-        else if (other.gameObject.CompareTag("Mushroom Orb") && shardState)
+        else if (other.gameObject.name == "Mushroom Orb Trigger" && shardState)
         {
+            player.toolState = true;
             Debug.Log("Orb!");
         }
     }
